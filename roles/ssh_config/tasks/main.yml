@@ -1,0 +1,59 @@
+---
+- name: ensure ssh is installed
+  become: true
+  package:
+    name: "{{ openssh_server_packages }}"
+    state: installed
+
+- name: get ssh version
+  command: >-
+    ssh -V
+  changed_when: false
+  register: ssh_version_raw
+
+- name: extract major version number
+  set_fact:
+    ssh_version: >-
+      {{
+        ssh_version_raw.stderr
+        .split(',')[0]
+        .split('_')[1]
+        .split('.')[0]
+      }}
+
+- name: check for freeipa
+  command: >-
+    grep freeipa.infra.massopen.cloud /etc/sssd/sssd.conf
+  register: freeipa_check
+  failed_when: false
+  changed_when: false
+
+- name: set ssh_use_freeipa fact
+  set_fact:
+    ssh_use_freeipa: "{{ freeipa_check.rc == 0 }}"
+
+- name: install sshd configuration
+  become: true
+  template:
+    src: sshd.j2.conf
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: 0600
+  register: sshd_config
+
+- name: validate ssh configuration
+  become: true
+  when: sshd_config is changed
+  command: >-
+    /usr/sbin/sshd -t
+  register: sshd_config_check
+  notify:
+    - restart sshd
+
+- name: ensure ssh is enabled
+  become: true
+  service:
+    name: "{{ openssh_service_name }}"
+    state: started
+    enabled: true

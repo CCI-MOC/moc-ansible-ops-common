@@ -7,12 +7,11 @@
     owner: root
     group: root
     mode: 0700
-    setype: ssh_home_t
 
 - name: install authorized keys
   become: true
   authorized_key:
     user: root
-    key: "{{ '\n'.join(root_authorized_keys|json_query('[].keys[]')) }}"
+    key: "{{ '\n'.join(root_authorized_keys) }}"
     exclusive: true
   when: root_authorized_keys is defined
