@@ -1,0 +1,53 @@
+---
+- name: ensure that crt_name is defined
+  fail:
+    msg: "You must set crt_name"
+  when: crt_name is not defined
+
+- name: ensure that crt_subject is defined
+  fail:
+    msg: "You must set crt_subject"
+  when: crt_subject is not defined
+
+- name: generate key for {{ crt_name }}
+  command: >-
+    openssl genrsa -out "{{ ca_dir }}/reqs/{{ crt_name }}.key"
+    {% if crt_passphrase is defined %}
+    -aes256 -passout pass:"{{ crt_passphrase }}"
+    {% endif %}
+    {{ crt_bits }}
+  args:
+    creates: "{{ ca_dir }}/reqs/{{ crt_name }}.key"
+
+- name: generate certificate request for {{ crt_name }} ({{ crt_subject }})
+  command: >-
+    openssl req -new
+    -subj "{{ crt_subject }}"
+    -key "{{ ca_dir }}/reqs/{{ crt_name }}.key"
+    -out "{{ ca_dir }}/reqs/{{ crt_name }}.req"
+    {% if crt_passphrase is defined %}
+    -passin pass:"{{ crt_passphrase }}"
+    {% endif %}
+  args:
+    creates: "{{ ca_dir }}/reqs/{{ crt_name }}.req"
+
+- name: sign certificate request for {{ crt_name }}
+  command: >-
+    openssl ca -batch
+    {% if ca_passphrase is defined %}
+    -passin pass:"{{ ca_passphrase }}"
+    {% endif %}
+    -config "{{ ca_dir }}/ca.conf"
+    -out "{{ ca_dir }}/certs/{{ crt_name }}.crt"
+    -infiles "{{ ca_dir }}/reqs/{{ crt_name }}.req"
+  args:
+    creates: "{{ ca_dir }}/certs/{{ crt_name }}.crt"
+
+- name: create combined certificate + key
+  shell: >-
+    cat "{{ ca_dir }}/certs/{{ crt_name }}.crt"
+    "{{ ca_dir }}/reqs/{{ crt_name }}.key" >
+    "{{ ca_dir }}/certs/{{ crt_name }}.combined.crt"
+  args:
+    creates:
+      "{{ ca_dir }}/certs/{{ crt_name }}.combined.crt"
